@@ -486,3 +486,36 @@ def get_issue_report(
             status_code=500,
             detail=f"Failed to fetch report: {str(e)}"
         )
+
+
+@app.get("/report-id")
+def get_report_id(issue_id: int):
+    try:
+        response = (
+            supabase
+            .table("issue_reports")
+            .select("report_id")
+            .eq("issue_id", issue_id)
+            .limit(1)
+            .execute()
+        )
+
+        if not response.data:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No report found for issue id {issue_id}"
+            )
+
+        return {
+            "issue_id": issue_id,
+            "report_id": response.data[0]["report_id"]
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
