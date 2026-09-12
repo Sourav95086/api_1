@@ -19,8 +19,8 @@ def get_report_id(issue_id: int):
         response = (
             supabase
             .table("issue_reports")
-            .select("reportId")
-            .eq("issueId", issue_id)
+            .select("report_id")
+            .eq("issue_id", issue_id)
             .limit(1)
             .execute()
         )
