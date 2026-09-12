@@ -1,9 +1,9 @@
 from fastapi import FastAPI, Query, HTTPException
-
 from supabase import create_client, Client
-
 import os
-
+import json
+import urllib.request
+import urllib.parse
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,7 +16,6 @@ app = FastAPI()
 # ============================================================
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 supabase: Client = create_client(
@@ -67,6 +66,58 @@ def get_fallback_evidence(issue_category):
     return CATEGORY_EVIDENCE_URLS.get(
         normalized_category
     )
+
+
+# ============================================================
+# REVERSE GEOCODE
+# ============================================================
+
+def get_address_from_coordinates(latitude, longitude):
+
+    if latitude is None or longitude is None:
+        return None
+
+    try:
+
+        params = urllib.parse.urlencode({
+            "lat": latitude,
+            "lon": longitude,
+            "format": "json",
+            "zoom": 18,
+            "addressdetails": 1
+        })
+
+        url = (
+            "https://nominatim.openstreetmap.org/reverse?"
+            + params
+        )
+
+        request = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent":
+                    "SnapFix-Civic-Issue-App/1.0"
+            }
+        )
+
+        with urllib.request.urlopen(
+                request,
+                timeout=10
+        ) as response:
+
+            data = json.loads(
+                response.read().decode("utf-8")
+            )
+
+        return data.get("display_name")
+
+    except Exception as e:
+
+        print(
+            f"Reverse geocoding failed: {str(e)}"
+        )
+
+        return None
 
 
 # ============================================================
@@ -236,9 +287,7 @@ def get_issue_report(
                     issue_category,
                     issue_weight,
                     estimated_cost_range,
-                    created_at,
-                    ward_processed,
-                    ward_processed_at
+                    created_at
                 )
                 """
             )
@@ -307,6 +356,41 @@ def get_issue_report(
 
 
         # ========================================================
+        # COORDINATES
+        # ========================================================
+
+        latitude = data.get(
+            "latitude"
+        )
+
+        longitude = data.get(
+            "longitude"
+        )
+
+
+        # ========================================================
+        # REVERSE GEOCODING
+        # ========================================================
+
+        address = get_address_from_coordinates(
+            latitude,
+            longitude
+        )
+
+
+        # --------------------------------------------------------
+        # If reverse geocoding fails,
+        # use the existing issue location
+        # --------------------------------------------------------
+
+        if not address:
+
+            address = data.get(
+                "issue_location"
+            )
+
+
+        # ========================================================
         # RESPONSE
         # ========================================================
 
@@ -371,38 +455,19 @@ def get_issue_report(
                     "issue_location"
                 ),
 
+            "address":
+                address,
+
             "latitude":
-                data.get(
-                    "latitude"
-                ),
+                latitude,
 
             "longitude":
-                data.get(
-                    "longitude"
-                ),
+                longitude,
 
             "issue_created_at":
                 (
                     issue_data.get(
                         "created_at"
-                    )
-                    if issue_data
-                    else None
-                ),
-
-            "ward_processed":
-                (
-                    issue_data.get(
-                        "ward_processed"
-                    )
-                    if issue_data
-                    else None
-                ),
-
-            "ward_processed_at":
-                (
-                    issue_data.get(
-                        "ward_processed_at"
                     )
                     if issue_data
                     else None
